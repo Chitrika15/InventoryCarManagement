@@ -1,0 +1,55 @@
+name: StockDrive IMS CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Typecheck Server
+        run: npm run typecheck --workspace=server
+
+      - name: Typecheck Client
+        run: npm run typecheck --workspace=client
+
+      - name: Seed Database
+        env:
+          MONGO_URI: mongodb://127.0.0.1:27017/stockdrive_ims
+        run: npm run seed --workspace=server
+
+      - name: Run Backend Tests
+        env:
+          TEST_MONGO_URI: mongodb://127.0.0.1:27017/stockdrive_ims_test
+        run: npm run test --workspace=server
+
+      - name: Run Frontend Tests
+        run: npm run test --workspace=client
+
+      - name: Build Server
+        run: npm run build --workspace=server
+
+      - name: Build Client
+        run: npm run build --workspace=client

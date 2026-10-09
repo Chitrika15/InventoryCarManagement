@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: stockdrive-mongo
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongosh --port 27017 --quiet) -eq 1
+      interval: 5s
+      start_period: 15s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: stockdrive-server
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGO_URI=mongodb://mongo:27017/stockdrive_ims?replicaSet=rs0
+      - JWT_ACCESS_SECRET=stockdrive_super_secure_jwt_access_secret_key_2026!
+      - JWT_REFRESH_SECRET=stockdrive_super_secure_jwt_refresh_secret_key_2026!
+      - JWT_ACCESS_EXPIRATION=15m
+      - JWT_REFRESH_EXPIRATION=7d
+      - CLIENT_URL=http://localhost:3000
+      - COOKIE_SECRET=stockdrive_cookie_signing_secret_key_2026!
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: stockdrive-client
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+
+volumes:
+  mongo_data:
